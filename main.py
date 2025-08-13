@@ -1,0 +1,151 @@
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from google import genai
+import subprocess
+from openai import OpenAI
+import os
+import csv
+
+# client = genai.Client(api_key=os.getenv("GENAI_API_KEY"))
+
+openai = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+app = FastAPI()
+
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_credentials=True,
+                   allow_methods=["*"],
+                   allow_headers=["*"])
+
+import re
+
+def clean_code_blocks(code_text: str) -> str:
+    """Remove markdown code fences (```something ... ```)."""
+    # Regex to remove any ```<lang> and ending ```
+    pattern = r"^```[a-zA-Z0-9]*\n([\s\S]*?)\n```$"
+    match = re.match(pattern, code_text.strip())
+    if match:
+        return match.group(1)
+    return code_text.strip()
+
+
+def run_python_file(file_path: str):
+    """Run a Python file and return stdout, stderr."""
+    result = subprocess.run(
+        ["python", file_path],
+        capture_output=True,
+        text=True
+    )
+    return result.stdout, result.stderr
+
+
+
+def generate_code(task: str) -> str:
+
+    task_breakdown_file = os.path.join('prompts', 'task_breakdowngpt2.txt')
+    with open(task_breakdown_file, 'r') as file:
+        task_breakdown_prompt = file.read()
+    
+    # response = client.models.generate_content(
+    #     model="gemini-2.5-flash",
+    #     contents=[task, task_breakdown_prompt],
+    #     )
+    
+    prompt = [
+        {
+            'role': 'system',
+            'content': task_breakdown_prompt
+        },
+        {
+            'role': 'user',
+            'content': task
+        }
+    ]
+
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=prompt,
+        response_format={ "type": "text" }
+    )
+    code_text = response.choices[0].message.content
+
+    
+    #code_text = response.text.strip()
+    
+    code_text = clean_code_blocks(code_text)
+
+    return code_text
+
+def fix_code(original_code: str, error_msg: str) -> str:
+    """Ask Gemini to fix Python code given the error."""
+    fix_prompt = f"""
+    The following Python code has errors:
+    ```
+    {original_code}
+    ```
+    The error was:
+    ```
+    {error_msg}
+    ```
+    Rewrite the full code so it runs without errors and keeps the same logic.
+    Output only the fixed Python code. If the a module is missing, then try to write the code without using 
+    it.
+    """
+    # response = client.models.generate_content(
+    #     model="gemini-2.5-flash",
+    #     contents=[fix_prompt],
+    # )
+
+    prompt = [
+        {
+            'role': 'user',
+            'content': fix_prompt
+        }
+    ]
+
+    response = openai.chat.completions.create(
+        model="gpt-4.1",
+        messages=prompt,
+        response_format={ "type": "text" }
+    )
+    code_text = response.choices[0].message.content
+
+
+    #code_text = response.text.strip()
+    
+    code_text = clean_code_blocks(code_text)
+
+    return code_text
+    
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the CSV Upload API"}
+
+@app.post("/api")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        text = contents.decode('utf-8')
+        code = generate_code(text)
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            with open('gen_code.py', 'w') as f:
+                f.write(code)
+            output, error = run_python_file('gen_code.py')
+
+            if not error:
+                return output
+            else:
+                code = fix_code(code, error)
+
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
