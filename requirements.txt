@@ -56,3 +56,4 @@ soupsieve==2.7
 typing-inspection==0.4.1
 tzdata==2025.2
 urllib3==2.5.0
+chardet==5.2.0
