@@ -10,6 +10,7 @@ import os
 import csv
 import re
 import chardet
+import uvicorn
 
 # client = genai.Client(api_key=)
 
@@ -203,5 +204,5 @@ async def upload_file(file: UploadFile = File(None),csv_file: UploadFile = File(
         return JSONResponse(status_code=400, content={"error": str(e)})
     
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
