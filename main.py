@@ -162,7 +162,7 @@ async def root():
     return {"message": "Welcome to the CSV Upload API"}
 
 @app.post("/api")
-async def upload_file(file: UploadFile = File(None),csv_file: UploadFile = File(None)):
+async def upload_file(file: UploadFile = File(None, alias="questions.txt"),csv_file: UploadFile = File(None, alias="data.csv")):
     try:
         contents = await file.read()
         text = contents.decode('utf-8')
