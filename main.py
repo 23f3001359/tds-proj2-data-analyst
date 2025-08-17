@@ -4,12 +4,11 @@ from fastapi.responses import JSONResponse
 from google import genai
 import subprocess
 import sys
-import pandas as pd
 from openai import OpenAI
 import os
 import csv
 import re
-import chardet
+
 import uvicorn
 
 # client = genai.Client(api_key=)
@@ -38,6 +37,7 @@ def clean_code_blocks(code_text: str) -> str:
     return code_text.strip()
 
 def clean_non_utf8(file_path: str):
+    import chardet
     with open(file_path, "rb") as f:
         raw_data = f.read()
         result = chardet.detect(raw_data)
@@ -168,6 +168,7 @@ async def upload_file(file: UploadFile = File(None),csv_file: UploadFile = File(
         text = contents.decode('utf-8')
 
         if csv_file is not None:
+            import pandas as pd
             # Save CSV to disk
             csv_path = os.path.join("uploads", csv_file.filename)
             os.makedirs("uploads", exist_ok=True)
