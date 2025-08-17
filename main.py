@@ -193,8 +193,6 @@ async def upload_file(file: UploadFile = File(None),csv_file: UploadFile = File(
                 f.write(code)
             clean_non_utf8('gen_code.py')
             output, error = run_python_file('gen_code.py')
-            print(output)
-            print(error)
 
             if error == "":
                 return output
